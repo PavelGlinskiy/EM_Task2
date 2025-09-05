@@ -1,0 +1,4 @@
+At the same time, we may have m reduce tasks for parallel processing. 
+Let's consider an example. We need to count the number of different words in n files.
+These files are fed into our program. Next, a certain number of workers are launched (the number can be configured with a separate parameter).
+

@@ -1,0 +1,3 @@
+We need to develop a program that will mimic the MapReduce framework.
+In reality, MapReduce uses independent nodes that communicate with each other over a network and have a shared storage space, but in our case, we will have separate threads.
+Our program will have several threads running simultaneously: one Coordinator
