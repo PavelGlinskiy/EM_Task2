@@ -17,6 +17,12 @@ public class Coordinator {
     private boolean allMapTasksCompleted = false;
 
     public Coordinator(List<String> inputFiles, int reduceCount) {
+        if (inputFiles == null || inputFiles.isEmpty()) {
+            throw new IllegalArgumentException("Список входных файлов не может быть null или пустым");
+        }
+        if (reduceCount <= 0) {
+            throw new IllegalArgumentException("Количество Reduce задач должно быть положительным, а получено: " + reduceCount);
+        }
         this.inputFiles = new ArrayList<>(inputFiles);
         this.reduceCount = reduceCount;
         
@@ -57,6 +63,11 @@ public class Coordinator {
                 if (file.exists()) {
                     intermediateFiles.add(file.getPath());
                 }
+            }
+
+            if (intermediateFiles.isEmpty()) {
+                System.out.println("REDUCE задача " + taskId + " пропущена: нет промежуточных файлов");
+                return new Task(TaskType.WAIT, -1, null, reduceCount, null);
             }
             
             System.out.println("Выдана REDUCE задача " + taskId + " с " + intermediateFiles.size() + " файлами");

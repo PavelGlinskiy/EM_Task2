@@ -11,7 +11,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class TcpEchoServer {
+
+    private static final Logger logger = LoggerFactory.getLogger(TcpEchoServer.class);
+
     public static final int DEFAULT_PORT = 8007;
     private static final int ACCEPT_TIMEOUT_MS = 1000;
     private static final int BUFFER_SIZE = 4096;
@@ -22,6 +28,11 @@ public class TcpEchoServer {
     private final ExecutorService workers;
 
     public TcpEchoServer(int port) {
+        if (port < 1 || port > 65535) {
+            throw new IllegalArgumentException(
+                    "Port number must be between 1 and 65535: " + port
+            );
+        }
         this.port = port;
         this.workers = Executors.newCachedThreadPool();
     }
@@ -29,14 +40,14 @@ public class TcpEchoServer {
     public void start() throws IOException {
         serverSocket = new ServerSocket(port);
         serverSocket.setSoTimeout(ACCEPT_TIMEOUT_MS);
-        log("Server started on port " + port);
+        logger.info("Server started on port {}", port);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log("Shutdown hook triggered.");
+            logger.info("Shutdown hook triggered.");
             try {
                 stop();
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Error during shutdown: {}", e.getMessage(), e);
             }
         }));
 
@@ -44,7 +55,7 @@ public class TcpEchoServer {
             while (running) {
                 try {
                     Socket client = serverSocket.accept();
-                    log("Accepted connection from " + client.getRemoteSocketAddress());
+                    logger.info("Accepted connection from {}", client.getRemoteSocketAddress());
                     workers.submit(() -> handleClient(client));
                 } catch (SocketTimeoutException e) {
                     // таймаут — проверяем флаг running и снова в цикл
@@ -53,7 +64,7 @@ public class TcpEchoServer {
         } finally {
             shutdownAndAwaitTermination();
             closeServerSocket();
-            log("Server stopped.");
+            logger.info("Server stopped.");
         }
     }
 
@@ -68,7 +79,7 @@ public class TcpEchoServer {
             try {
                 serverSocket.close();
             } catch (IOException e) {
-                log("Error closing server socket: " + e.getMessage());
+                logger.error("Error closing server socket: {}", e.getMessage(), e);
             }
         }
     }
@@ -79,7 +90,7 @@ public class TcpEchoServer {
             if (!workers.awaitTermination(5, TimeUnit.SECONDS)) {
                 workers.shutdownNow();
                 if (!workers.awaitTermination(5, TimeUnit.SECONDS)) {
-                    log("Worker pool did not terminate.");
+                    logger.warn("Worker pool did not terminate.");
                 }
             }
         } catch (InterruptedException ie) {
@@ -101,15 +112,12 @@ public class TcpEchoServer {
                 out.write(buffer, 0, read);
                 out.flush();
             }
-            log("Connection closed by client " + s.getRemoteSocketAddress());
+            logger.info("Connection closed by client {}", s.getRemoteSocketAddress());
         } catch (IOException e) {
-            log("I/O error with client " + socket.getRemoteSocketAddress() + ": " + e.getMessage());
+            logger.error("I/O error with client {}: {}", socket.getRemoteSocketAddress(), e.getMessage());
         }
     }
 
-    private static void log(String message) {
-        System.out.printf("%s [TcpEchoServer] %s%n", LocalDateTime.now(), message);
-    }
 
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
@@ -117,15 +125,17 @@ public class TcpEchoServer {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (NumberFormatException ignored) {
-                System.err.println("Bad port argument, using default " + DEFAULT_PORT);
+                logger.warn("Bad port argument, using default {}", DEFAULT_PORT);
             }
         }
 
-        TcpEchoServer server = new TcpEchoServer(port);
         try {
+            TcpEchoServer server = new TcpEchoServer(port);
             server.start();
+        } catch (IllegalArgumentException e) {
+            logger.error("Invalid port: {}", e.getMessage());
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Server error: {}", e.getMessage(), e);
         }
     }
 }

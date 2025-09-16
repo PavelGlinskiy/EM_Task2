@@ -28,44 +28,52 @@ public class Worker implements Runnable {
     @Override
     public void run() {
         System.out.println("Воркер " + workerId + " запущен");
-        
-        while (true) {
+
+        while (!Thread.currentThread().isInterrupted()) {
             Task task = coordinator.requestTask();
-            
-            switch (task.getType()) {
-                case MAP:
-                    doMapTask(task);
-                    break;
-                case REDUCE:
-                    doReduceTask(task);
-                    break;
-                case WAIT:
-                    try {
+
+            try {
+                switch (task.getType()) {
+                    case MAP:
+                        doMapTask(task);
+                        break;
+                    case REDUCE:
+                        doReduceTask(task);
+                        break;
+                    case WAIT:
                         Thread.sleep(50);
-                    } catch (InterruptedException e) {
+                        break;
+                    case DONE:
+                        System.out.println("Воркер " + workerId + " завершил работу");
                         return;
-                    }
-                    continue;
-                case DONE:
-                    System.out.println("Воркер " + workerId + " завершил работу");
-                    return;
+                }
+            } catch (InterruptedException e) {
+                System.out.println("Воркер " + workerId + " был прерван");
+                Thread.currentThread().interrupt();
+                return;
             }
         }
+        System.out.println("Воркер " + workerId + " завершил работу из-за прерывания");
     }
 
     private void doMapTask(Task task) {
-        try {
-            System.out.println("Воркер " + workerId + " обрабатывает файл: " + task.getFileName());
-            
-            String content = Files.readString(Paths.get(task.getFileName()));
-            
-            List<KeyValue> words = wordCounter.map(task.getFileName(), content);
-            System.out.println("Найдено " + words.size() + " слов");
-            
-            writeToIntermediateFiles(task.getTaskId(), words, task.getReduceCount());
-            
+        System.out.println("Воркер " + workerId + " обрабатывает файл: " + task.getFileName());
+
+        List<KeyValue> allWords = new ArrayList<>();
+
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(task.getFileName()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                List<KeyValue> words = wordCounter.map(task.getFileName(), line);
+                allWords.addAll(words);
+            }
+
+            System.out.println("Найдено " + allWords.size() + " слов");
+
+            writeToIntermediateFiles(task.getTaskId(), allWords, task.getReduceCount());
+
             coordinator.mapTaskCompleted(task.getTaskId());
-            
+
         } catch (IOException e) {
             System.err.println("Ошибка при обработке файла " + task.getFileName() + ": " + e.getMessage());
         }
